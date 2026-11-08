@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eagle Token Admin Setting</title>
+<script src="/vendor/pocketbase.umd.js"></script>
+<script src="/config.js"></script>
+<script src="/shared.js"></script>
+<link rel="stylesheet" href="/app.css">
+<style>
+  /* Admin console overrides — dark panel matching the app.
+     Previously this used a light-gray body with lime text, which
+     failed WCAG contrast. Now inherits design tokens from app.css. */
+  body {
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(245,158,11,0.07), transparent 60%),
+      var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .hidden { display: none !important; }
+
+  header.topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--card-border);
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(15, 15, 25, 0.85);
+    backdrop-filter: blur(10px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark {
+    width: 30px; height: 30px; border-radius: 7px;
+    background: linear-gradient(160deg, var(--accent), var(--accent-hover));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: #0a0c0f; font-weight: 800;
+  }
+  .brand .name { font-weight: 700; letter-spacing: 0.02em; font-size: 15px; color: var(--text-primary); }
+  .brand .name small { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--text-secondary); font-weight: 500; margin-top: 1px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; color: var(--text-secondary);
+    border: 1px solid var(--card-border); padding: 6px 12px; border-radius: 20px;
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--card-border); color: var(--text-secondary);
+    font-family: inherit; font-size: 12.5px; padding: 8px 14px; border-radius: 8px;
+    cursor: pointer; transition: all .15s ease; text-decoration: none; display: inline-block;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--text-primary); }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 32px 28px 80px; }
+
+  #loginScreen {
+    min-height: calc(100vh - 68px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .login-card {
+    width: 100%; max-width: 360px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 32px 28px;
+  }
+  .login-card h1 { font-size: 17px; margin: 0 0 4px; color: var(--text-primary); }
+  .login-card p.sub { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
+  label { display: block; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px; font-family: var(--mono); letter-spacing: 0.04em; }
+  input[type=email], input[type=password], input[type=number], input[type=text] {
+    width: 100%; background: rgba(0,0,0,0.35); border: 1px solid var(--card-border); color: var(--text-primary);
+    padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-family: inherit;
+    margin-bottom: 16px; outline: none; transition: border-color .15s;
+  }
+  input:focus { border-color: var(--accent); }
+  .btn-primary {
+    width: 100%; background: var(--accent); color: #191203; border: none;
+    padding: 11px 14px; border-radius: 8px; font-weight: 700; font-size: 13.5px;
+    cursor: pointer; transition: filter .15s;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .form-error { color: var(--error); font-size: 12.5px; margin: -6px 0 14px; min-height: 1px; }
+
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 44px 0 16px; }
+  .section-head:first-of-type { margin-top: 0; }
+  .section-head h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-secondary); margin: 0; font-weight: 600; }
+  .section-head .hint { font-size: 12px; color: var(--text-secondary); font-family: var(--mono); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; }
+  .stat-card .label { font-size: 11.5px; color: var(--text-secondary); font-family: var(--mono); letter-spacing: 0.03em; margin-bottom: 10px; }
+  .stat-card .value { font-family: var(--mono); font-size: 28px; font-weight: 600; line-height: 1; color: var(--text-primary); }
+  .stat-card .value.gold { color: var(--accent); }
+  .stat-card .foot { margin-top: 8px; font-size: 11.5px; color: var(--text-secondary); }
+
+  .supply-card { grid-column: 1 / -1; display: grid; grid-template-columns: 180px 1fr; gap: 28px; align-items: center; padding: 24px 26px; }
+  .gauge-wrap { position: relative; width: 160px; height: 160px; }
+  .gauge-wrap svg { transform: rotate(-90deg); }
+  .gauge-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .gauge-center .pct { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--accent); }
+  .gauge-center .pct-label { font-size: 9.5px; color: var(--text-secondary); letter-spacing: 0.1em; margin-top: 2px; font-family: var(--mono); }
+  .supply-details .label { font-size: 11.5px; color: var(--text-secondary); font-family: var(--mono); letter-spacing: 0.03em; margin-bottom: 14px; }
+  .supply-row { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--card-border); }
+  .supply-row:last-child { border-bottom: none; }
+  .supply-row .k { font-size: 12.5px; color: var(--text-secondary); }
+  .supply-row .v { font-family: var(--mono); font-size: 14.5px; color: var(--text-primary); }
+  .supply-row .v.gold { color: var(--accent); font-weight: 600; }
+
+  .config-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
+  .field-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; }
+  .field-card .fname { font-size: 13px; font-weight: 600; margin-bottom: 2px; color: var(--text-primary); }
+  .field-card .fdesc { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5; }
+  .field-card .frow { display: flex; align-items: center; gap: 10px; }
+  .field-card input { margin-bottom: 0; flex: 1; }
+  .field-card .unit { font-family: var(--mono); font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+  .config-actions { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+  .config-actions .btn-primary { width: auto; padding: 11px 26px; }
+  #saveMsg { font-size: 12.5px; font-family: var(--mono); }
+  #saveMsg.ok { color: var(--success); }
+  #saveMsg.err { color: var(--error); }
+
+  .refresh-note { font-size: 11.5px; color: var(--text-secondary); font-family: var(--mono); }
+
+  @media (max-width: 760px) {
+    .stat-grid { grid-template-columns: 1fr; }
+    .config-grid { grid-template-columns: 1fr; }
+    .supply-card { grid-template-columns: 1fr; text-align: center; }
+    .gauge-wrap { margin: 0 auto; }
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark">E</div>
+    <div class="name">Eagle Token<small>ADMIN CONSOLE</small></div>
+    <a class="btn-ghost" id="home" href="./index.html">Back HOME</a>
+  </div>
+  <div class="topbar-right">
+    <div class="status-pill"><span class="dot" id="connDot"></span><span id="connLabel">connecting…</span></div>
+    <button class="btn-ghost hidden" id="logoutBtn">Log out</button>
+  </div>
+</header>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>Admin sign in</h1>
+    <p class="sub">Requires an account with <code>is_admin</code> enabled.</p>
+    <form id="loginForm">
+      <label for="loginEmail">Email</label>
+      <input type="email" id="loginEmail" autocomplete="username" required />
+      <label for="loginPass">Password</label>
+      <input type="password" id="loginPass" autocomplete="current-password" required />
+      <div class="form-error" id="loginError"></div>
+      <button type="submit" class="btn-primary" id="loginBtn">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<main id="dashboard" class="hidden">
+
+<!-- TASKS MANAGEMENT -->
+<div class="section-head">
+  <h2>Tasks</h2>
+  <span class="hint">
+    <button class="btn-ghost" id="newTaskBtn" style="padding:5px 12px;font-size:11.5px;">+ New task</button>
+  </span>
+</div>
+
+<div class="card" style="padding:0;">
+  <div id="adminTasksList" style="padding:16px 20px;">
+    <div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;">Loading tasks…</div>
+  </div>
+</div>
+
+<!-- SUBMISSIONS -->
+<div class="section-head">
+  <h2>Task submissions</h2>
+  <span class="hint" id="subsRefresh">auto-refreshes every 30s</span>
+</div>
+
+<div class="card" style="padding:0;">
+  <div style="display:flex;gap:8px;padding:16px 20px;border-bottom:1px solid var(--card-border);flex-wrap:wrap;">
+    <button class="btn-ghost" data-status="pending"  id="filterPending">Pending</button>
+    <button class="btn-ghost" data-status="approved" id="filterApproved">Approved</button>
+    <button class="btn-ghost" data-status="rejected" id="filterRejected">Rejected</button>
+    <button class="btn-ghost" data-status="all"      id="filterAll">All</button>
+  </div>
+  <div id="submissionsList" style="padding:16px 20px;"></div>
+</div>
+
+<!-- TASK EDITOR MODAL -->
+<div id="taskEditorModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:999; align-items:center; justify-content:center; padding:20px; overflow-y:auto;">
+  <div class="card" style="max-width:520px; width:100%; margin:auto;">
+    <div id="taskEditorTitle" style="font-weight:700; font-size:16px; margin-bottom:16px;">New task</div>
+
+    <label>Type</label>
+    <select id="editTaskType" style="width:100%; padding:10px; margin-bottom:14px; background:rgba(0,0,0,0.35); border:1px solid var(--card-border); color:var(--text-primary); border-radius:8px; font-size:13.5px;">
+      <option value="exchange">💱 Exchange signup</option>
+      <option value="twitter_follow">🐦 X follow</option>
+      <option value="twitter_retweet">🔁 X retweet</option>
+      <option value="youtube_sub">📺 YouTube subscribe</option>
+      <option value="video_watch">🎥 Video watch</option>
+    </select>
+
+    <label>Label</label>
+    <input id="editTaskLabel" type="text" placeholder="e.g. Sign up on Binance" maxlength="80" />
+
+    <label>Description</label>
+    <input id="editTaskDesc" type="text" placeholder="What the user must do" maxlength="300" />
+
+    <label>URL</label>
+    <input id="editTaskUrl" type="url" placeholder="https://…" />
+
+    <label>Reward (EAGLE)</label>
+    <input id="editTaskReward" type="number" step="0.01" min="0.01" placeholder="50" />
+
+    <label>Sort order</label>
+    <input id="editTaskSort" type="number" step="1" min="0" value="0" />
+
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;text-transform:none;">
+      <input id="editTaskActive" type="checkbox" checked style="width:auto;margin:0;" />
+      <span style="font-family:var(--mono);font-size:11.5px;color:var(--text-secondary);">Active (visible to users)</span>
+    </label>
+
+    <div id="taskEditorError" style="color:var(--error);font-size:12.5px;margin-bottom:10px;min-height:14px;"></div>
+
+    <div style="display:flex;gap:10px;">
+      <button id="saveTaskBtn" class="btn-primary" style="flex:1;padding:11px;">Save</button>
+      <button id="cancelTaskBtn" class="btn-ghost" style="flex:0 0 auto;padding:11px 20px;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+  <div class="section-head">
+    <h2>Network overview</h2>
+    <span class="hint" id="lastUpdated"></span>
+  </div>
+
+  <div class="stat-grid">
+    <div class="card stat-card">
+      <div class="label">TOTAL REGISTERED USERS</div>
+      <div class="value" id="statTotalUsers">—</div>
+      <div class="foot">all-time signups</div>
+    </div>
+    <div class="card stat-card">
+      <div class="label">CURRENTLY ACTIVE</div>
+      <div class="value gold" id="statActiveUsers">—</div>
+      <div class="foot" id="statActivePct">— of total mining right now</div>
+    </div>
+    <div class="card stat-card">
+      <div class="label">TOTAL MINED</div>
+      <div class="value" id="statTotalMined">—</div>
+      <div class="foot">EAGLE earned via mining (excludes bonuses)</div>
+    </div>
+
+    <div class="card supply-card">
+      <div class="gauge-wrap">
+        <svg width="160" height="160" viewBox="0 0 160 160">
+          <circle cx="80" cy="80" r="70" fill="none" stroke="#23282f" stroke-width="12"/>
+          <circle id="gaugeArc" cx="80" cy="80" r="70" fill="none" stroke="#f59e0b" stroke-width="12"
+                  stroke-linecap="round" stroke-dasharray="439.8" stroke-dashoffset="439.8"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="pct" id="gaugePct">—</div>
+          <div class="pct-label">CIRCULATING</div>
+        </div>
+      </div>
+      <div class="supply-details">
+        <div class="label">SUPPLY</div>
+        <div class="supply-row"><span class="k">Circulating supply</span><span class="v gold" id="statCirculating">—</span></div>
+        <div class="supply-row"><span class="k">Total supply (cap)</span><span class="v" id="statTotalSupply">74,184T EAGLE</span></div>
+        <div class="supply-row"><span class="k">Remaining to mint</span><span class="v" id="statRemaining">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>Rates &amp; bonuses</h2>
+    <span class="hint">changes apply to new activity immediately</span>
+  </div>
+
+  <form id="configForm">
+    <div class="config-grid">
+
+      <div class="field-card">
+        <div class="fname">Base mining rate</div>
+        <div class="fdesc">Rate every user earns with zero bonuses applied.</div>
+        <div class="frow"><input type="number" step="0.0001" min="0" id="cfg_base_rate" /><span class="unit">EAGLE/hr</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Task completion bonus</div>
+        <div class="fdesc">Added per completed social task, for 4 hours per task.</div>
+        <div class="frow"><input type="number" step="0.0001" min="0" id="cfg_bonus_rate" /><span class="unit">EAGLE/hr</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Referral mining bonus</div>
+        <div class="fdesc">Added per actively-mining referral.</div>
+        <div class="frow"><input type="number" step="0.0001" min="0" id="cfg_referral_mining_bonus" /><span class="unit">EAGLE/hr</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Max referral bonus</div>
+        <div class="fdesc">Cap on total referral bonus, regardless of active referral count.</div>
+        <div class="frow"><input type="number" step="0.0001" min="0" id="cfg_max_referral_bonus_rate" /><span class="unit">EAGLE/hr</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Registration bonus</div>
+        <div class="fdesc">One-time EAGLE credited to every new signup.</div>
+        <div class="frow"><input type="number" step="0.01" min="0" id="cfg_registration_bonus" /><span class="unit">EAGLE</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Referral reward bonus</div>
+        <div class="fdesc">One-time EAGLE credited to a referrer per successful referral.</div>
+        <div class="frow"><input type="number" step="0.01" min="0" id="cfg_referral_reward_bonus" /><span class="unit">EAGLE</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Session length</div>
+        <div class="fdesc">How long a mining session runs before it must be claimed.</div>
+        <div class="frow"><input type="number" step="1" min="1" max="168" id="cfg_session_max_hours" /><span class="unit">hours</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Task expiry</div>
+        <div class="fdesc">How long a completed task's bonus lasts before it lapses.</div>
+        <div class="frow"><input type="number" step="1" min="1" max="168" id="cfg_task_expiry_hours" /><span class="unit">hours</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Ad boost per ad</div>
+        <div class="fdesc">Added per watched rewarded ad (4 independent slots on the home screen).</div>
+        <div class="frow"><input type="number" step="0.0001" min="0" id="cfg_ad_boost_per_ad" /><span class="unit">EAGLE/hr</span></div>
+      </div>
+
+      <div class="field-card">
+        <div class="fname">Ad boost duration</div>
+        <div class="fdesc">How long each watched ad's boost lasts before that slot can be rewatched.</div>
+        <div class="frow"><input type="number" step="1" min="1" max="72" id="cfg_ad_boost_duration_hours" /><span class="unit">hours</span></div>
+      </div>
+
+    </div>
+
+    <div class="config-actions">
+      <button type="submit" class="btn-primary" id="saveBtn">Save changes</button>
+      <span class="refresh-note">loaded from app_settings — falls back to hardcoded defaults if unset</span>
+      <span id="saveMsg"></span>
+    </div>
+  </form>
+
+</main>
+
+<script>
+function escapeAttr(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+const CONFIG_FIELDS = [
+  "base_rate", "bonus_rate", "referral_mining_bonus", "max_referral_bonus_rate",
+  "registration_bonus", "referral_reward_bonus", "session_max_hours", "task_expiry_hours",
+  "ad_boost_per_ad", "ad_boost_duration_hours",
+];
+
+// ── FORMAT HELPERS ───────────────────────────────────────────────
+// ── HELPERS ──────────────────────────────────────────────────────
+
+
+function fmtInt(n) { return Math.round(n).toLocaleString("en-US"); }
+function fmtCoin(n) {
+  n = parseFloat(n) || 0;
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + "T";
+  if (n >= 1e9)  return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6)  return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3)  return (n / 1e3).toFixed(2) + "K";
+  return n.toFixed(2);
+}
+
+// ── BOOTSTRAP (await EagleReady before using pb/api) ─────────────
+(async function init() {
+  let pb, api;
+
+  try {
+    const eagle = await window.EagleReady;
+    pb  = eagle.pb;
+    api = eagle.api;
+  } catch (err) {
+    document.getElementById("loginScreen").innerHTML =
+      `<div class="login-card"><div style="color:var(--error);font-size:13px;">
+         <strong>Configuration failed</strong><br>${String(err.message || err)}
+       </div></div>`;
+    return;
+  }
+
+  function setConn(ok, label) {
+    const dot = document.getElementById("connDot");
+    dot.style.background = ok ? "var(--success)" : "var(--error)";
+    dot.style.boxShadow = `0 0 8px ${ok ? "var(--success)" : "var(--error)"}`;
+    document.getElementById("connLabel").textContent = label;
+  }
+
+  // ── LOGIN / LOGOUT ─────────────────────────────────────────────
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("loginEmail").value.trim();
+    const pass  = document.getElementById("loginPass").value;
+    const btn   = document.getElementById("loginBtn");
+    const errEl = document.getElementById("loginError");
+    errEl.textContent = "";
+    btn.disabled = true; btn.textContent = "Signing in…";
+
+    try {
+      await pb.collection("users").authWithPassword(email, pass);
+      const me = await api("GET", "/eagle/me");
+      if (!me.is_admin) {
+        pb.authStore.clear();
+        throw new Error("This account is not an admin.");
+      }
+      enterDashboard();
+    } catch (err) {
+      errEl.textContent = err.message || "Sign in failed.";
+    } finally {
+      btn.disabled = false; btn.textContent = "Sign in";
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    pb.authStore.clear();
+    showLogin();
+  });
+
+  pb.authStore.onChange((token) => {
+    if (!token) showLogin();
+  });
+
+  function showLogin() {
+    document.getElementById("dashboard").classList.add("hidden");
+    document.getElementById("logoutBtn").classList.add("hidden");
+    document.getElementById("loginScreen").classList.remove("hidden");
+    setConn(false, "signed out");
+  }
+
+    async function enterDashboard() {
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("dashboard").classList.remove("hidden");
+    document.getElementById("logoutBtn").classList.remove("hidden");
+    setConn(true, "connected");
+
+    try {
+      await Promise.all([
+        loadStats(),
+        loadConfig(),
+        loadAdminTasks(),
+        loadSubmissions(),
+      ]);
+    } catch (err) {
+      console.error("[admin] dashboard init failed", err);
+    }
+
+    setInterval(loadSubmissions, 30000);
+    setInterval(loadAdminTasks, 60000);
+  }
+  function handleAuthFailure(err) {
+    if (err && (err.status === 401 || err.status === 403)) {
+      setConn(false, "admin access revoked");
+      pb.authStore.clear();
+      showLogin();
+      document.getElementById("loginError").textContent =
+        "This account is no longer an admin.";
+      return true;
+    }
+    return false;
+  }
+
+  // ── STATS ──────────────────────────────────────────────────────
+  const GAUGE_CIRC = 439.8; // 2 * PI * r(70)
+
+  async function loadStats() {
+    try {
+      const s = await api("GET", "/eagle/admin/stats");
+
+      document.getElementById("statTotalUsers").textContent  = fmtInt(s.total_users);
+      document.getElementById("statActiveUsers").textContent = fmtInt(s.active_users);
+      document.getElementById("statActivePct").textContent =
+        s.total_users > 0 ? `${((s.active_users / s.total_users) * 100).toFixed(1)}% of total mining right now` : "— of total mining right now";
+      document.getElementById("statTotalMined").textContent  = fmtCoin(s.total_mined) + " EAGLE";
+
+      document.getElementById("statCirculating").textContent = fmtCoin(s.circulating_supply) + " EAGLE";
+      document.getElementById("statTotalSupply").textContent = fmtCoin(s.total_supply) + " EAGLE";
+      document.getElementById("statRemaining").textContent   = fmtCoin(Math.max(0, s.total_supply - s.circulating_supply)) + " EAGLE";
+
+      const pct = s.total_supply > 0 ? Math.min(100, (s.circulating_supply / s.total_supply) * 100) : 0;
+      document.getElementById("gaugePct").textContent = pct < 0.01 ? "<0.01%" : pct.toFixed(pct < 1 ? 4 : 2) + "%";
+      document.getElementById("gaugeArc").setAttribute(
+        "stroke-dashoffset", String(GAUGE_CIRC - (GAUGE_CIRC * pct) / 100)
+      );
+
+      document.getElementById("lastUpdated").textContent = "updated " + new Date().toLocaleTimeString();
+    } catch (err) {
+      if (handleAuthFailure(err)) return;
+      setConn(false, err.message || "failed to load stats");
+    }
+  }
+
+  // ── CONFIG ─────────────────────────────────────────────────────
+  async function loadConfig() {
+    try {
+      const cfg = await api("GET", "/eagle/admin/config");
+      for (const key of CONFIG_FIELDS) {
+        const el = document.getElementById("cfg_" + key);
+        if (el && cfg[key] !== undefined) el.value = cfg[key];
+      }
+    } catch (err) {
+      if (handleAuthFailure(err)) return;
+      setConn(false, err.message || "failed to load config");
+    }
+  }
+
+  document.getElementById("configForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("saveBtn");
+    const msg = document.getElementById("saveMsg");
+    msg.textContent = ""; msg.className = "";
+    btn.disabled = true; btn.textContent = "Saving…";
+
+    const payload = {};
+    for (const key of CONFIG_FIELDS) {
+      const el = document.getElementById("cfg_" + key);
+      if (el && el.value !== "") payload[key] = parseFloat(el.value);
+    }
+
+    try {
+      const result = await api("POST", "/eagle/admin/config", payload);
+      msg.textContent = result.live_sessions_patched
+        ? `Saved. Re-patched ${result.live_sessions_patched} live session(s).`
+        : "Saved.";
+      msg.className = "ok";
+      await loadConfig();
+    } catch (err) {
+      if (handleAuthFailure(err)) return;
+      msg.textContent = err.message || "Save failed.";
+      msg.className = "err";
+    } finally {
+      btn.disabled = false; btn.textContent = "Save changes";
+    }
+  });
+
+// ── TASK MANAGEMENT ─────────────────────────────────────────────
+let _adminTasks = [];
+let _subFilter  = "pending";
+
+async function loadAdminTasks() {
+  try {
+    const data = await api("GET", "/eagle/admin/tasks");
+    _adminTasks = data.tasks || [];
+    renderAdminTasks();
+  } catch (err) {
+    console.error("[admin] loadAdminTasks failed:", err);
+  }
+}
+
+function renderAdminTasks() {
+  const el = document.getElementById("adminTasksList");
+  if (!el) return;
+
+  if (!_adminTasks.length) {
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;">
+      No tasks yet. Click "+ New task" to create one.
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = _adminTasks.map(t => `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--card-border);gap:16px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;">
+          ${escapeAttr(t.label)}
+          ${t.active
+            ? '<span style="font-size:10px;color:var(--success);margin-left:6px;">● ACTIVE</span>'
+            : '<span style="font-size:10px;color:var(--text-muted);margin-left:6px;">○ INACTIVE</span>'}
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">${escapeAttr(t.description || "")}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;font-family:var(--mono);word-break:break-all;">
+          ${escapeAttr(t.type)} · ${escapeAttr(t.url || "no URL")} · sort ${t.sort_order}
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">
+          <span style="color:var(--accent);">${t.pending_count} pending</span>
+          · ${t.approved_count} approved
+        </div>
+      </div>
+      <div style="text-align:right;min-width:170px;flex-shrink:0;">
+        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:6px;">+${t.reward} EAGLE</div>
+        <button class="btn-ghost" style="padding:5px 10px;font-size:11px;margin-bottom:4px;" data-action="edit" data-id="${t.id}">Edit</button>
+        <button class="btn-ghost" style="padding:5px 10px;font-size:11px;margin-bottom:4px;" data-action="toggle" data-id="${t.id}">${t.active ? "Disable" : "Enable"}</button>
+        <button class="btn-ghost" style="padding:5px 10px;font-size:11px;color:var(--error);border-color:var(--error);" data-action="delete" data-id="${t.id}">Delete</button>
+      </div>
+    </div>
+  `).join("");
+
+  el.querySelectorAll("button[data-action='edit']").forEach(b =>
+    b.addEventListener("click", () => openTaskEditor(_adminTasks.find(x => x.id === b.dataset.id))));
+  el.querySelectorAll("button[data-action='toggle']").forEach(b =>
+    b.addEventListener("click", async () => {
+      try {
+        await api("POST", "/eagle/admin/tasks/toggle", { id: b.dataset.id });
+        await loadAdminTasks();
+      } catch (err) { alert(err.message || "Toggle failed"); }
+    }));
+  el.querySelectorAll("button[data-action='delete']").forEach(b =>
+    b.addEventListener("click", () => deleteTask(b.dataset.id)));
+}
+
+function openTaskEditor(task) {
+  const isEdit = !!task;
+  document.getElementById("taskEditorTitle").textContent = isEdit ? "Edit task" : "New task";
+  document.getElementById("editTaskType").value     = task?.type || "exchange";
+  document.getElementById("editTaskLabel").value    = task?.label || "";
+  document.getElementById("editTaskDesc").value     = task?.description || "";
+  document.getElementById("editTaskUrl").value      = task?.url || "";
+  document.getElementById("editTaskReward").value   = task?.reward || "";
+  document.getElementById("editTaskSort").value     = task?.sort_order || 0;
+  document.getElementById("editTaskActive").checked = isEdit ? task.active : true;
+  document.getElementById("taskEditorError").textContent = "";
+
+  const modal = document.getElementById("taskEditorModal");
+  modal.dataset.editId = isEdit ? task.id : "";
+  modal.style.display  = "flex";
+}
+
+document.getElementById("newTaskBtn")?.addEventListener("click", () => openTaskEditor(null));
+document.getElementById("cancelTaskBtn")?.addEventListener("click", () => {
+  document.getElementById("taskEditorModal").style.display = "none";
+});
+
+document.getElementById("saveTaskBtn")?.addEventListener("click", async () => {
+  const modal = document.getElementById("taskEditorModal");
+  const btn   = document.getElementById("saveTaskBtn");
+  const errEl = document.getElementById("taskEditorError");
+
+  const payload = {
+    id:          modal.dataset.editId || undefined,
+    type:        document.getElementById("editTaskType").value,
+    label:       document.getElementById("editTaskLabel").value.trim(),
+    description: document.getElementById("editTaskDesc").value.trim(),
+    url:         document.getElementById("editTaskUrl").value.trim(),
+    reward:      parseFloat(document.getElementById("editTaskReward").value),
+    sort_order:  parseInt(document.getElementById("editTaskSort").value, 10) || 0,
+    active:      document.getElementById("editTaskActive").checked,
+  };
+
+  btn.disabled = true; btn.textContent = "Saving…";
+  errEl.textContent = "";
+
+  try {
+    await api("POST", "/eagle/admin/tasks/save", payload);
+    modal.style.display = "none";
+    await loadAdminTasks();
+  } catch (err) {
+    errEl.textContent = err.message || "Save failed";
+  } finally {
+    btn.disabled = false; btn.textContent = "Save";
+  }
+});
+
+async function deleteTask(id) {
+  const task = _adminTasks.find(t => t.id === id);
+  if (!task) return;
+
+  const msg = task.approved_count > 0
+    ? `"${task.label}" has ${task.approved_count} approved submissions. Deleting removes history. Continue?`
+    : `Delete "${task.label}"?`;
+
+  if (!confirm(msg)) return;
+
+  try {
+    const payload = { id };
+    if (task.approved_count > 0) payload.force = true;
+    await api("POST", "/eagle/admin/tasks/delete", payload);
+    await loadAdminTasks();
+  } catch (err) { alert(err.message || "Delete failed"); }
+}
+
+// ── SUBMISSIONS REVIEW ───────────────────────────────────────────
+async function loadSubmissions() {
+  try {
+    const data = await api("GET", `/eagle/admin/task-submissions?status=${_subFilter}`);
+    renderSubmissions(data.submissions || []);
+  } catch (err) {
+    console.error("[admin] loadSubmissions failed:", err);
+  }
+}
+
+function renderSubmissions(list) {
+  const el = document.getElementById("submissionsList");
+  if (!el) return;
+
+  if (!list.length) {
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;">No ${_subFilter} submissions</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(s => `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--card-border);gap:16px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;">
+          ${escapeAttr(s.username)}
+          <span style="color:var(--text-secondary);font-weight:400;">· ${escapeAttr(s.task_label)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;font-family:var(--mono);word-break:break-all;">
+          ${escapeAttr(s.proof)}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${new Date(s.submitted_at).toLocaleString()}</div>
+        ${s.rejection_reason ? `<div style="font-size:11px;color:var(--error);margin-top:4px;">Reason: ${escapeAttr(s.rejection_reason)}</div>` : ""}
+      </div>
+      <div style="text-align:right;min-width:140px;flex-shrink:0;">
+        <div style="font-family:var(--mono);font-size:13px;color:var(--accent);margin-bottom:6px;">+${s.reward} EAGLE</div>
+        ${s.status === "pending" ? `
+          <button class="btn-primary" style="padding:6px 12px;font-size:12px;border-radius:6px;" data-action="approve" data-id="${s.id}">Approve</button>
+          <button class="btn-ghost" style="padding:6px 12px;font-size:12px;margin-top:4px;" data-action="reject" data-id="${s.id}">Reject</button>
+        ` : `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:${s.status === "approved" ? "var(--success)" : "var(--error)"};">${s.status}</div>`}
+      </div>
+    </div>
+  `).join("");
+
+  el.querySelectorAll("button[data-action='approve']").forEach(b =>
+    b.addEventListener("click", () => reviewSubmission(b.dataset.id, "approve")));
+  el.querySelectorAll("button[data-action='reject']").forEach(b =>
+    b.addEventListener("click", () => reviewSubmission(b.dataset.id, "reject")));
+}
+
+async function reviewSubmission(id, action) {
+  let reason = "";
+  if (action === "reject") {
+    reason = prompt("Reason for rejection (optional):") || "";
+  }
+  try {
+    await api("POST", "/eagle/admin/task-review", { submission_id: id, action, reason });
+    await loadSubmissions();
+    await loadAdminTasks(); // refresh counts
+  } catch (err) {
+    alert(err.message || "Review failed");
+  }
+}
+
+document.querySelectorAll("[data-status]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    _subFilter = btn.dataset.status;
+    document.querySelectorAll("[data-status]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    loadSubmissions();
+  });
+});
+
+
+
+  // ── INIT SESSION ───────────────────────────────────────────────
+  setConn(false, "checking session…");
+  if (pb.authStore.isValid) {
+    try {
+      await pb.collection("users").authRefresh();
+      const me = await api("GET", "/eagle/me");
+      if (me.is_admin) { await enterDashboard(); return; }
+      pb.authStore.clear();
+    } catch (_) {
+      pb.authStore.clear();
+    }
+  }
+  showLogin();
+})();
+</script>
+
+</body>
+</html>

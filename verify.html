@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Verify Email — Eagle Token</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/app.css">
+<style>
+  .verify-shell {
+    max-width: 420px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    text-align: center;
+  }
+  .verify-icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; margin-bottom: 20px;
+  }
+  .verify-icon.pending { background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); }
+  .verify-icon.success { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); color: var(--success); }
+  .verify-icon.error   { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: var(--error); }
+  .verify-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+  .verify-desc  { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px; max-width: 320px; }
+  .verify-spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--card-border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .verify-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 280px; }
+  .verify-actions .btn { padding: 13px; text-decoration: none; display: block; }
+</style>
+</head>
+<body>
+
+<div class="verify-shell">
+
+  <div class="logo-circle" style="width:56px;height:56px;font-size:26px;margin-bottom:20px;">🦅</div>
+
+  <div id="statePending">
+    <div class="verify-icon pending"><div class="verify-spinner"></div></div>
+    <div class="verify-title">Verifying your email…</div>
+    <div class="verify-desc">Hang tight, this only takes a second.</div>
+  </div>
+
+  <div id="stateSuccess" class="hidden">
+    <div class="verify-icon success">✓</div>
+    <div class="verify-title">Email verified</div>
+    <div class="verify-desc">Your account is active. Head back to Eagle Token to start mining.</div>
+    <div class="verify-actions">
+      <a class="btn btn-primary" href="/">Open Eagle Token</a>
+    </div>
+  </div>
+
+  <div id="stateError" class="hidden">
+    <div class="verify-icon error">!</div>
+    <div class="verify-title" id="errorTitle">Verification failed</div>
+    <div class="verify-desc" id="errorDesc">This link is invalid or has expired.</div>
+    <div class="verify-actions">
+      <a class="btn btn-primary" href="/">Back to Eagle Token</a>
+    </div>
+  </div>
+
+</div>
+
+<script src="/vendor/pocketbase.umd.js"></script>
+<script src="./config.js"></script>
+<script src="./shared.js"></script>
+
+<script>
+  const pendingEl    = document.getElementById("statePending");
+  const successEl    = document.getElementById("stateSuccess");
+  const errorEl      = document.getElementById("stateError");
+  const errorTitleEl = document.getElementById("errorTitle");
+  const errorDescEl  = document.getElementById("errorDesc");
+
+  function showError(title, desc) {
+    pendingEl.classList.add("hidden");
+    errorTitleEl.textContent = title;
+    errorDescEl.textContent = desc;
+    errorEl.classList.remove("hidden");
+  }
+
+  function showSuccess() {
+    pendingEl.classList.add("hidden");
+    successEl.classList.remove("hidden");
+  }
+
+  let attempted = false;
+
+  (async () => {
+    if (attempted) return;
+    attempted = true;
+
+    let pb;
+    try {
+      const eagle = await window.EagleReady;
+      pb = eagle.pb;
+    } catch (err) {
+      showError("Configuration failed", err.message || "Could not load app config.");
+      return;
+    }
+
+    const token = new URLSearchParams(window.location.search).get("token");
+
+    if (!token) {
+      showError("Missing verification link", "This page needs a verification token in the URL. Check the link in your email again.");
+      return;
+    }
+
+    try {
+      await pb.collection("users").confirmVerification(token);
+      showSuccess();
+    } catch (err) {
+      console.error("[verify] confirmVerification failed:", err?.status, err?.response || err);
+
+      const serverMsg = (err?.response?.message || err?.message || "").toLowerCase();
+
+      if (serverMsg.includes("already verified")) {
+        showSuccess();
+      } else if (err && err.status === 400) {
+        showError("Link invalid or expired", "This verification link no longer works. Request a new one from the app.");
+      } else {
+        showError("Something went wrong", "We couldn't reach the server. Check your connection and try opening the link again.");
+      }
+    }
+  })();
+</script>
+
+</body>
+</html>

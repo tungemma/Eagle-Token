@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Mine EAGLE tokens securely with our mining network" />
+  <meta name="theme-color" content="#f59e0b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="referrer" content="no-referrer-when-downgrade" />
+  <meta name="apple-mobile-web-app-title" content="Eagle Token" />
+  <meta name="bitmedia-site-verification" content="400e91aec5ae2235b567649fa0d7864b" />
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23f59e0b' width='192' height='192'/><text x='96' y='144' font-size='120' text-anchor='middle' dominant-baseline='middle'>🦅</text></svg>" />
+  <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="app.css">
+
+  <title>Eagle Token - Mining App</title>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="pwa-banner" id="pwaBanner">
+      📲 Install Eagle Token
+      <button type="button" onclick="installPWA()" style="margin-left: 12px; padding: 6px 12px; background: #000; color: var(--accent); border: 0; border-radius: 6px; cursor: pointer; font-weight: 600;">Install</button>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="loading">
+      <div class="spinner"></div>
+      <p>Initializing Eagle Token...</p>
+    </div>
+
+    <!-- AUTH SCREEN -->
+    <div id="authScreen" class="hidden">
+      <div style="text-align: center; margin: 60px 0 40px;">
+        <div class="logo-circle" style="margin: 0 auto 16px;">🦅</div>
+        <h1 style="font-size: 24px; margin: 0 0 8px;">Eagle Token</h1>
+        <p style="color: var(--text-secondary); margin: 0;">Mining Network</p>
+      </div>
+
+      <div class="card card-lg">
+        <div id="authAlert"></div>
+
+        <div class="tab-container">
+          <button id="tabLogin" class="tab-btn active" type="button">Login</button>
+          <button id="tabRegister" class="tab-btn" type="button">Register</button>
+        </div>
+
+        <div id="loginForm">
+          <input id="loginEmail" placeholder="Email" type="email" />
+          <input id="loginPassword" placeholder="Password" type="password" />
+          <button id="loginBtn" type="button" class="btn btn-primary" style="width: 100%; padding: 12px; margin-bottom: 10px;">Login</button>
+        </div>
+
+        <form id="registerForm" class="hidden" onsubmit="return false;">
+          <input id="regUsername" placeholder="Username (unique)" type="text" autocomplete="username" />
+          <input type="file" id="regAvatar" accept="image/*">
+          <input id="regEmail" placeholder="Email" type="email" autocomplete="email" />
+          <input id="regPassword" placeholder="Password (8–72 characters)" type="password" autocomplete="new-password" />
+
+          <div id="pwStrengthBar" style="height: 4px; background: var(--card-border); border-radius: 2px; margin: -6px 0 4px; overflow: hidden;">
+            <div id="pwStrengthFill" style="height: 100%; width: 0%; background: #ef4444; transition: width 0.2s, background 0.2s;"></div>
+          </div>
+          <div id="pwHint" style="font-size: 11px; color: var(--text-secondary); margin: 0 0 10px; min-height: 14px;"></div>
+
+          <input id="regConfirmPassword" placeholder="Confirm Password" type="password" autocomplete="new-password" />
+
+          <button id="registerBtn" type="button" class="btn btn-primary" style="width: 100%; padding: 12px;">Create Account</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- EMAIL VERIFICATION SCREEN -->
+    <div id="verificationScreen" class="hidden">
+      <div style="text-align: center; margin: 60px 0 40px;">
+        <div class="logo-circle" style="margin: 0 auto 16px; font-size: 40px;">✉️</div>
+        <h1 style="font-size: 24px; margin: 0 0 8px;">Verify Your Email</h1>
+        <p style="color: var(--text-secondary); margin: 0;">Complete your account setup</p>
+      </div>
+
+      <div class="card card-lg">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <p style="color: var(--text-secondary); font-size: 14px; margin: 0 0 8px;">We sent a verification link to:</p>
+          <p style="font-weight:700;font-size:16px;margin:0;color:var(--accent);" id="verifyEmail"></p>
+        </div>
+
+        <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin-bottom: 16px; text-align: center;">Click the link in your email to verify your account. If you don't see the email, check your spam folder.</p>
+
+        <div id="verifyAlert"></div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button id="sendVerificationBtn" type="button" class="btn btn-primary" style="width: 100%; padding: 12px;">Resend Email</button>
+          <button id="checkVerificationBtn" type="button" class="btn btn-secondary" style="width: 100%; padding: 12px;">I've Verified - Continue</button>
+          <button id="verificationLogoutBtn" type="button" class="btn btn-ghost" style="width: 100%; padding: 12px;">Use Different Email</button>
+        </div>
+
+        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--card-border);">
+          <p style="color: var(--text-muted); font-size: 12px; text-align: center; margin: 0;">Why verify? This keeps your account safe and secure.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <main id="mainScreens" class="hidden">
+      <header>
+        <div class="logo">
+          <div class="logo-circle" style="width: 48px; height: 48px; font-size: 24px;">🦅</div>
+          <div class="logo-text">
+            <h1>Eagle Token</h1>
+            <p id="headerBalance">0 EAGLE</p>
+          </div>
+        </div>
+        <button id="refreshBtn" type="button" class="btn btn-secondary" style="border-radius: 50%; width: 44px; height: 44px; padding: 0;">🔃</button>
+      </header>
+
+      <!-- HOME SCREEN -->
+      <section id="homeScreen">
+        <div class="card card-lg">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <div>
+              <p style="margin: 0; color: var(--text-secondary); font-size: 12px;">Welcome back</p>
+              <h2 style="margin: 4px 0 0; font-size: 20px;" id="uname">User</h2>
+            </div>
+            <div class="card" style="background: rgba(255, 255, 255, 0.05); padding: 12px; text-align: right; border: 1px solid var(--card-border);">
+              <p style="margin: 0; color: var(--text-secondary); font-size: 11px;">BALANCE</p>
+              <p style="margin: 4px 0 0; font-size: 18px; font-weight: 700; color: var(--accent);" id="balanceTop">0 EAGLE</p>
+            </div>
+          </div>
+
+          <div class="stat-grid">
+            <div class="stat-item">
+              <div class="stat-icon">💰</div>
+              <div class="stat-label">Total Balance</div>
+              <div class="stat-value" id="statBalance1">0 EAGLE</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-icon">⛏️</div>
+              <div class="stat-label">Stored Coins</div>
+              <div class="stat-value" id="statStored">0 EAGLE</div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- TASK REWARDS -->
+<div class="card" id="taskRewardsCard">
+  <div class="card-header">🎯 Complete Tasks for Fixed Rewards</div>
+  <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 16px;">
+    Submit proof, wait for admin review, earn fixed EAGLE rewards.
+  </p>
+
+  <div id="taskAlert"></div>
+
+  <div id="tasksList" style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="bonus-box" style="justify-content: center;">
+      <div style="color: var(--text-secondary); font-size: 13px;">Loading tasks…</div>
+    </div>
+  </div>
+</div>
+      
+
+        
+        <!-- MINING STATUS -->
+        <div class="card card-lg">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div>
+              <p style="margin: 0; color: var(--text-secondary); font-size: 12px;">Mining Status</p>
+              <p style="margin: 4px 0 0; font-size: 16px; font-weight: 700;" id="miningStatusTextHome">Inactive</p>
+            </div>
+            <div style="font-size: 32px;">⛏️</div>
+          </div>
+          <p style="margin: 0; color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">Balance: <span id="miningStatusBalance">0</span> EAGLE</p>
+
+          <div id="homeMiningProgressBarContainer" style="margin-top: 16px; display: none;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary);">
+              <span id="homeProgressTimePercent">0% Time Remaining</span>
+              <span id="homeProgressCoinMined">0.0000 EAGLE Mined</span>
+            </div>
+            <div style="height: 10px; border-radius: 5px; background-color: var(--card-border);">
+              <div id="homeProgressBarFill" style="height: 100%; width: 0%; border-radius: 5px; background-color: var(--accent); transition: width 1s ease-out;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- QUICK ACTIONS -->
+        <div class="card">
+          <div class="card-header">Quick Actions</div>
+          <div class="stat-grid">
+            <button type="button" id="quickAction" class="card" style="background: transparent; border: 1px solid var(--card-border); padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
+              <div style="font-size: 28px; margin-bottom: 8px;">👥</div>
+              <div style="font-weight: 700; font-size: 14px;">Invite Friends</div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Earn rewards</div>
+            </button>
+            <a href="roadmap.pdf" class="card" style="background: transparent; border: 1px solid var(--card-border); padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s; text-decoration: none; color: inherit;">
+              <div style="font-size: 28px; margin-bottom: 8px;">📋</div>
+              <div style="font-weight: 700; font-size: 14px;">Roadmap</div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">View progress</div>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- MINING SCREEN -->
+      <section id="miningScreen" class="hidden">
+        <div class="mining-container">
+          <h1 class="mining-title">Mining Center</h1>
+          <button id="startMiningBtn" type="button" class="play-btn">▶</button>
+
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-secondary); margin-bottom: 20px;" id="miningStatusText">Inactive</div>
+
+          <div id="miningAlert" style="width: 100%;"></div>
+
+          <div id="miningProgressBarContainer" style="margin-bottom: 20px; display: none; width: 100%;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary);">
+              <span id="progressTimePercent">0% Time Remaining</span>
+              <span id="progressCoinMined">0.0000 EAGLE Mined</span>
+            </div>
+            <div style="height: 10px; border-radius: 5px; background-color: var(--card-border);">
+              <div id="progressBarFill" style="height: 100%; width: 0%; border-radius: 5px; background-color: var(--accent); transition: width 1s ease-out;"></div>
+            </div>
+          </div>
+
+          <div class="card card-lg">
+            <div class="card-header" style="margin-bottom: 16px;">Mining Statistics</div>
+            <div class="stat-grid">
+              <div class="stat-item">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-label">Base Rate</div>
+                <div class="stat-value" id="baseRate">1.00</div>
+                <div style="font-size: 11px; color: var(--text-secondary);">eagle/h</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon">📈</div>
+                <div class="stat-label">Total Rate</div>
+                <div class="stat-value" id="totalRate">1.00</div>
+                <div style="font-size: 11px; color: var(--text-secondary);">eagle/h</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon">💵</div>
+                <div class="stat-label">Balance</div>
+                <div class="stat-value" id="miningBalance">0</div>
+                <div style="font-size: 11px; color: var(--text-secondary);">EAGLE</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-label">Bonus Rate</div>
+                <div class="stat-value" id="bonusRateDisplay">0.00%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WALLET SCREEN -->
+      <section id="walletScreen" class="hidden">
+        <div class="card card-lg">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <h2 style="margin: 0; font-size: 24px;">My Wallet</h2>
+              <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">Manage your EAGLE</p>
+            </div>
+            <div style="font-size: 32px;">🔃</div>
+          </div>
+
+          <div class="card" style="background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent); margin-bottom: 16px;">
+            <div class="card-title">Total Balance</div>
+            <div class="card-value" id="walletBalance">0 EAGLE</div>
+            <button id="copyAddrBtn" type="button" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 12px;">Copy Address</button>
+          </div>
+
+          <div class="card">
+            <div class="card-header" style="margin-bottom: 16px;">Quick Actions</div>
+            <div class="row">
+              <button id="sendBtn" type="button" class="btn btn-primary" style="padding: 12px;">Send</button>
+              <button id="receiveBtn" type="button" class="btn btn-secondary" style="padding: 12px;">Receive</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header" style="margin-bottom: 12px;">Recent Transactions</div>
+            <div id="recentList"></div>
+            <div id="noTxMsg" class="text-center" style="padding: 24px; color: var(--text-muted); font-size: 13px;">No transactions yet</div>
+            <button id="loadMoreTxBtn" type="button" class="btn btn-secondary" style="display:none; width:100%; margin-top:12px; padding:10px; font-size:13px;">Load more</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PARTNERS SCREEN -->
+      <section id="partnersScreen" class="hidden">
+        <div class="card card-lg">
+          <div class="card-header" style="margin-bottom: 16px;">🤝 Partners & Referrals</div>
+          <p style="color: var(--text-secondary); margin: 0 0 16px;">Earn rewards by inviting friends</p>
+
+          <div class="card" style="background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent); margin-bottom: 16px; padding: 16px;">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">YOUR REFERRAL CODE</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--accent); word-break: break-all; margin-bottom: 8px;" id="referralCode">Loading...</div>
+
+            <button id="copyReferralBtn" type="button" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 12px;">📋 Copy Referral Link</button>
+            <button id="refreshReferralBtn" type="button" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 12px; margin-top: 8px;">🔄 Refresh Stats</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div class="bonus-box" style="flex-direction: column; text-align: center;">
+              <div class="bonus-icon">🎁</div>
+              <div class="bonus-title">Sign-up Bonus</div>
+              <div class="bonus-desc">Both get 10 EAGLE</div>
+            </div>
+            <div class="bonus-box" style="flex-direction: column; text-align: center;">
+              <div class="bonus-icon">⛏️</div>
+              <div class="bonus-title">Mining Bonus</div>
+              <div class="bonus-desc">+0.1 EAGLE/hour per active referral</div>
+            </div>
+          </div>
+
+          <div class="card" style="background: rgba(0, 0, 0, 0.2); margin-bottom: 16px;">
+            <div class="card-header" style="margin-bottom: 12px;">📊 Your Referral Stats</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">TOTAL REFERRALS</div>
+                <div style="font-size: 20px; font-weight: 700; color: var(--accent);" id="totalReferrals">0</div>
+              </div>
+              <div>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">TOTAL EARNED</div>
+                <div style="font-size: 20px; font-weight: 700; color: var(--accent);" id="referralEarnings">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="background: rgba(0, 0, 0, 0.2);">
+            <div class="card-header" style="margin-bottom: 12px;">👥 Your Referrals</div>
+            <div id="referralsList">
+              <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 13px;">No referrals yet</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE SCREEN -->
+      <section id="profileScreen" class="hidden">
+        <div class="profile-header">
+          <div class="profile-avatar" id="profAvatar">👤</div>
+          <div class="profile-name" id="profUser">User</div>
+          <div class="profile-email" id="profEmail"></div>
+        </div>
+
+        <div class="card card-lg">
+          <div class="card-header" style="margin-bottom: 16px;">Account Information</div>
+
+          <div class="card" style="background: rgba(0, 0, 0, 0.2); padding: 16px; margin-bottom: 16px;">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">BALANCE</div>
+            <div style="font-size: 20px; font-weight: 700; color: var(--accent);" id="profBalance">0 EAGLE</div>
+          </div>
+
+          <a id="adminConsoleLink" href="./admin.html" class="btn btn-primary" style="display:none; width:100%; padding:12px; margin-bottom:16px; text-align:center; text-decoration:none;">🔧 Open Admin Console</a>
+
+          <div class="card" style="background: rgba(0, 0, 0, 0.2); padding: 16px; margin-bottom: 16px;">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">MEMBER SINCE</div>
+            <div style="font-size: 16px; font-weight: 700;" id="profMemberSince">Nov 21, 2025</div>
+          </div>
+
+          <div style="border-top: 1px solid var(--card-border); padding-top: 16px; margin-bottom: 16px;">
+            <div class="card-header" style="margin-bottom: 16px;">Security</div>
+
+            <button id="togglePasswordBtn" type="button" class="btn btn-secondary" style="width: 100%; padding: 12px; margin-bottom: 12px;">🔒 Change Password</button>
+
+            <div id="passwordChangeForm" style="display: none; margin-top: 12px;">
+              <div class="card" style="background: rgba(0, 0, 0, 0.3); padding: 16px;">
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">Enter your current password and choose a new one</p>
+
+                <input id="currentPassword" type="password" placeholder="Current Password" style="width: 100%; padding: 12px; margin-bottom: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: 8px; color: white; font-size: 14px;"/>
+                <input id="newPassword" type="password" placeholder="New Password (min 6 chars)" style="width: 100%; padding: 12px; margin-bottom: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: 8px; color: white; font-size: 14px;"/>
+                <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" style="width: 100%; padding: 12px; margin-bottom: 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: 8px; color: white; font-size: 14px;"/>
+
+                <button id="changePasswordBtn" type="button" class="btn btn-primary" style="width: 100%; padding: 12px;">Change Password</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="other-links" style="display: flex; flex-direction: column; gap: 8px;">
+            <a href="roadmap.pdf" download="Eagle-Token-Roadmap.pdf" class="btn btn-primary" style="display:block; padding: 12px; text-align:center; text-decoration:none;">Download Roadmap</a>
+            <a href="whitepaper.pdf" download="Eagle-Token-Whitepaper.pdf" class="btn btn-primary" style="display:block; padding: 12px; text-align:center; text-decoration:none;">Download Whitepaper</a>
+            <a href="./terms.html" class="btn btn-primary" style="display:block; padding: 12px; text-align:center; text-decoration:none;">Read Our Terms</a>
+            <a href="./privacy.html" class="btn btn-primary" style="display:block; padding: 12px; text-align:center; text-decoration:none;">Read Our Privacy</a>
+          </div>
+
+          <div style="border-top: 1px solid var(--card-border); padding-top: 16px; margin-top: 16px;">
+            <div class="card-header" style="margin-bottom: 16px;">Account Actions</div>
+
+            <button id="deleteAccountBtn" type="button" class="btn" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; margin-bottom: 12px; padding: 12px;">Delete Account</button>
+
+            <button id="logoutBtn" type="button" class="btn" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ee860f; border: 1px solid #ef4444; padding: 12px;">Logout</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TASK SUBMIT MODAL -->
+<div id="taskSubmitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:999; align-items:center; justify-content:center; padding:20px;">
+  <div class="card card-lg" style="max-width:400px; width:100%;">
+    <div id="taskSubmitTitle" style="font-weight:700; font-size:16px; margin-bottom:6px;"></div>
+    <p id="taskSubmitDesc" style="color:var(--text-secondary); font-size:13px; margin-bottom:14px; line-height:1.5;"></p>
+
+    <p id="taskSubmitHint" style="color:var(--text-muted); font-size:11px; margin-bottom:10px; font-style:italic;"></p>
+
+    <label id="taskSubmitInputLabel" style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;"></label>
+    <input id="taskSubmitInput" type="text"
+      style="width:100%; padding:11px; margin-bottom:12px; background:rgba(0,0,0,0.3); border:1px solid var(--card-border); border-radius:8px; color:white; font-size:14px;" />
+
+    <div id="taskSubmitError" style="color:var(--error); font-size:12px; margin-bottom:10px; min-height:14px;"></div>
+
+    <button id="taskSubmitBtn" type="button" class="btn btn-primary" style="width:100%; padding:12px;">Submit</button>
+    <button id="taskSubmitCancelBtn" type="button"
+      style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--text-secondary); font-size:12px; cursor:pointer;">Cancel</button>
+  </div>
+</div>
+    </main>
+
+    <!-- AD MODAL -->
+    <div id="adModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999; align-items: center; justify-content: center; padding: 20px;">
+      <div class="card card-lg" style="max-width: 360px; width: 100%; text-align: center;">
+        <div id="adModalTitle" style="font-weight: 700; font-size: 16px; margin-bottom: 12px;">Watch ad to continue</div>
+        <div id="adModalSlot" style="min-height: 250px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 14px; overflow: hidden;">
+          <div id="adCreativeContainer" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;"></div>
+        </div>
+        <div id="adModalTimer" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">Loading ad…</div>
+        <button type="button" id="adModalActionBtn" class="btn btn-primary" style="width:100%;" disabled>Please wait…</button>
+        <button type="button" id="adModalCancelBtn" style="width:100%; margin-top:8px; background:transparent; border:none; color: var(--text-secondary); font-size:12px; cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- DELETE ACCOUNT MODAL -->
+    <div id="deleteAccountModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999; align-items: center; justify-content: center; padding: 20px;">
+      <div class="card card-lg" style="max-width: 360px; width: 100%;">
+        <div style="font-weight: 700; font-size: 16px; margin-bottom: 8px;">Delete account</div>
+        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+          This permanently deletes your account, balance, and mining history. Enter your password to confirm.
+        </p>
+        <input id="deleteAccountPassword" type="password" placeholder="Password" style="width:100%; padding:12px; margin-bottom:12px; background:rgba(0,0,0,0.3); border:1px solid var(--card-border); border-radius:8px; color:white; font-size:14px;" />
+        <div id="deleteAccountError" style="color: var(--error); font-size: 12px; margin-bottom: 10px; min-height: 14px;"></div>
+        <button type="button" id="deleteAccountConfirmBtn" class="btn" style="width:100%; background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; padding:12px;">Permanently delete</button>
+        <button type="button" id="deleteAccountCancelBtn" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--text-secondary); font-size:12px; cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+
+    <footer id="footer" class="hidden">© 2025 Eagle Token Network</footer>
+
+    <!-- NAVIGATION -->
+    <nav id="nav" class="hidden">
+      <a href="#home" id="navHome" class="active" data-screen="home">🏠 <span>Home</span></a>
+      <a href="#mining" id="navMining" data-screen="mining">⛏️ <span>Mining</span></a>
+      <a href="#partners" id="navPartners" data-screen="partners">👥 <span>Partners</span></a>
+      <a href="#wallet" id="navWallet" data-screen="wallet">💰 <span>Wallet</span></a>
+      <a href="#profile" id="navProfile" data-screen="profile">👤 <span>Profile</span></a>
+    </nav>
+  </div>
+
+<script src="/vendor/pocketbase.umd.js"></script>
+<script src="/config.js"></script>
+<script src="/shared.js"></script>
+<script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(console.warn);
+      });
+    }
+  </script>
+</body>
+</html>
