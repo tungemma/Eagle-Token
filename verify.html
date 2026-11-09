@@ -72,7 +72,7 @@
 
 </div>
 
-<script src="/vendor/pocketbase.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./config.js"></script>
 <script src="./shared.js"></script>
 
@@ -101,40 +101,87 @@
     if (attempted) return;
     attempted = true;
 
-    let pb;
     try {
+      // Wait until config.js and shared.js have initialized the Supabase client.
       const eagle = await window.EagleReady;
-      pb = eagle.pb;
-    } catch (err) {
-      showError("Configuration failed", err.message || "Could not load app config.");
-      return;
-    }
+      const supabase = eagle?.supabase;
 
-    const token = new URLSearchParams(window.location.search).get("token");
-
-    if (!token) {
-      showError("Missing verification link", "This page needs a verification token in the URL. Check the link in your email again.");
-      return;
-    }
-
-    try {
-      await pb.collection("users").confirmVerification(token);
-      showSuccess();
-    } catch (err) {
-      console.error("[verify] confirmVerification failed:", err?.status, err?.response || err);
-
-      const serverMsg = (err?.response?.message || err?.message || "").toLowerCase();
-
-      if (serverMsg.includes("already verified")) {
-        showSuccess();
-      } else if (err && err.status === 400) {
-        showError("Link invalid or expired", "This verification link no longer works. Request a new one from the app.");
-      } else {
-        showError("Something went wrong", "We couldn't reach the server. Check your connection and try opening the link again.");
+      if (!supabase?.auth?.verifyOtp) {
+        throw new Error("Supabase authentication is not available.");
       }
+
+      const params = new URLSearchParams(window.location.search);
+
+      // Supabase may redirect an authentication error back to this page.
+      const redirectError = params.get("error_description") || params.get("error");
+      if (redirectError) {
+        showError(
+          "Verification failed",
+          redirectError.replace(/\+/g, " ")
+        );
+        return;
+      }
+
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type");
+
+      if (!tokenHash || !type) {
+        showError(
+          "Invalid verification link",
+          "This link is missing its Supabase verification details. Request a new verification email from the app."
+        );
+        return;
+      }
+
+      // Only accept email-verification OTP types on this page.
+      if (type !== "signup" && type !== "email") {
+        showError(
+          "Invalid verification link",
+          "This link is not an email-signup verification link. Please use the correct email from Eagle Mining."
+        );
+        return;
+      }
+
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type
+      });
+
+      if (error) {
+        console.error("[verify] Supabase verifyOtp failed:", error.message);
+
+        const message = (error.message || "").toLowerCase();
+
+        if (message.includes("expired") || message.includes("invalid")) {
+          showError(
+            "Link invalid or expired",
+            "This verification link is invalid, expired, or has already been used. Request a new verification email from the app."
+          );
+        } else {
+          showError(
+            "Verification failed",
+            error.message || "Supabase could not verify this email. Please try again."
+          );
+        }
+        return;
+      }
+
+      if (data?.user || data?.session) {
+        showSuccess();
+      } else {
+        showError(
+          "Verification incomplete",
+          "Supabase did not confirm the account. Please request a new verification email."
+        );
+      }
+    } catch (err) {
+      console.error("[verify] Initialization failed:", err);
+      showError(
+        "Configuration failed",
+        err?.message || "Could not initialize Eagle Mining authentication. Check your connection and try again."
+      );
     }
   })();
 </script>
-
 </body>
 </html>
