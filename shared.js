@@ -1,71 +1,221 @@
-/* ================================================================
-   Eagle Token — shared.js
-   Loaded after /config.js and the PocketBase SDK.
 
-   Because config.js is now async, shared.js exposes its own ready
-   promise (window.EagleReady) that app.js / admin.js / verify.html
-   must await before touching window.Eagle.
+/* ================================================================
+   Eagle Mining — shared.js
+   Supabase client initialization and shared application helpers.
+
+   Load order:
+   1. Supabase JS SDK
+   2. config.js
+   3. shared.js
+   4. app.js / admin.js
+
+   All pages must await window.EagleReady before using Eagle.
    ================================================================ */
 
 (function () {
   "use strict";
 
   window.EagleReady = (async function init() {
-    const cfgPromise = window.__EAGLE_CONFIG_READY__;
-    if (!cfgPromise) {
+
+    // ------------------------------------------------------------
+    // 1. Wait for configuration
+    // ------------------------------------------------------------
+
+    const configPromise = window.__EAGLE_CONFIG_READY__;
+
+    if (!configPromise) {
       throw new Error(
-        "[eagle] shared.js: config.js did not run or did not expose __EAGLE_CONFIG_READY__."
+        "[eagle] config.js did not expose __EAGLE_CONFIG_READY__."
       );
     }
 
     let cfg;
+
     try {
-      cfg = await cfgPromise;
-    } catch (_) {
+      cfg = await configPromise;
+    } catch (error) {
+      console.error("[eagle] Configuration loading failed:", error);
+      throw new Error("Unable to load Eagle Mining configuration.");
+    }
+
+    if (!cfg?.supabase_url || !cfg?.supabase_anon_key) {
       throw new Error(
-        "[eagle] shared.js: config.json failed to load. See earlier console errors."
+        "[eagle] Missing Supabase URL or Publishable key."
       );
     }
 
-    if (!cfg || !cfg.pb_url) {
+    // ------------------------------------------------------------
+    // 2. Verify Supabase SDK
+    // ------------------------------------------------------------
+
+    if (
+      !window.supabase ||
+      typeof window.supabase.createClient !== "function"
+    ) {
       throw new Error(
-        "[eagle] shared.js: __EAGLE_CONFIG__.pb_url is missing."
+        "[eagle] Supabase JavaScript SDK is not loaded."
       );
     }
 
-     const PB_URL = cfg.pb_url||"http://127.0.0.1:3000";
+  const SUPABASE_URL = cfg.supabase_url.replace(/\/+$/, "");
 
-    // Single PocketBase instance for the whole page.
-    const pb = new PocketBase(PB_URL);
-    pb.autoCancellation(true);
+    // ------------------------------------------------------------
+    // 3. Create the single Supabase client
+    // ------------------------------------------------------------
 
-    // ── API helper ─────────────────────────────────────────────
-    // Throws on non-2xx with { status, data } attached.
-    // opts.signal: optional AbortSignal for cancellation.
-    async function api(method, path, body, opts) {
-      const options = opts || {};
-      const fetchOpts = { method, headers: {}, signal: options.signal };
-
-      if (pb.authStore.isValid && pb.authStore.token) {
-        fetchOpts.headers["Authorization"] = pb.authStore.token;
+    const supabase = window.supabase.createClient(
+      SUPABASE_URL,
+      cfg.supabase_anon_key,
+      {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true,
+          flowType: "pkce"
+        }
       }
-      if (body) {
-        fetchOpts.headers["Content-Type"] = "application/json";
-        fetchOpts.body = JSON.stringify(body);
+    );
+
+    // ------------------------------------------------------------
+    // 4. Authentication helpers
+    // ------------------------------------------------------------
+
+    async function getCurrentUser() {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error) throw error;
+
+      return data.user;
+    }
+
+    async function getSession() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) throw error;
+
+      return data.session;
+    }
+
+    async function requireUser() {
+      const user = await getCurrentUser();
+
+      if (!user) {
+        throw new Error("Authentication required.");
       }
 
-      const res = await fetch(`${PB_URL}${path}`, fetchOpts);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw Object.assign(
-          new Error(data.error || `HTTP ${res.status}`),
-          { status: res.status, data }
+      return user;
+    }
+
+    async function signOut() {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) throw error;
+
+      return true;
+    }
+
+    function onAuthStateChange(callback) {
+      const { data } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          callback(event, session);
+        }
+      );
+
+      return data.subscription;
+    }
+
+    // ------------------------------------------------------------
+    // 5. Database RPC helper
+    // ------------------------------------------------------------
+
+    async function rpc(functionName, params = {}) {
+      const { data, error } = await supabase.rpc(
+        functionName,
+        params
+      );
+
+      if (error) {
+        console.error(
+          `[eagle] RPC ${functionName} failed:`,
+          error
         );
+
+        throw error;
       }
+
       return data;
     }
 
-    window.Eagle = { PB_URL, pb, api };
-    return window.Eagle;
+    // ------------------------------------------------------------
+    // 6. Edge Function helper
+    // ------------------------------------------------------------
+
+    async function invokeFunction(functionName, body = {}) {
+      const { data, error } = await supabase.functions.invoke(
+        functionName,
+        { body }
+      );
+
+      if (error) {
+        console.error(
+          `[eagle] Edge Function ${functionName} failed:`,
+          error
+        );
+
+        throw error;
+      }
+
+      return data;
+    }
+
+    // ------------------------------------------------------------
+    // 7. Standardized error helper
+    // ------------------------------------------------------------
+
+    function handleError(error, fallback = "Something went wrong.") {
+      console.error("[eagle]", error);
+
+      return (
+        error?.message ||
+        error?.error_description ||
+        fallback
+      );
+    }
+
+    // ------------------------------------------------------------
+    // 8. Expose shared Eagle interface
+    // ------------------------------------------------------------
+
+    const Eagle = {
+      SUPABASE_URL,
+      supabase,
+
+      // Authentication
+      auth: supabase.auth,
+      getCurrentUser,
+      getSession,
+      requireUser,
+      signOut,
+      onAuthStateChange,
+
+      // Database
+      db: supabase,
+      rpc,
+
+      // Server functions
+      functions: supabase.functions,
+      invokeFunction,
+
+      // Error handling
+      handleError
+    };
+
+    window.Eagle = Eagle;
+
+    console.info("[eagle] Supabase client initialized successfully.");
+
+    return Eagle;
+
   })();
+
 })();
