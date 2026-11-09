@@ -1,4 +1,5 @@
 [build]
-  # Plain static site: no build step, publish the repository root.
-  command = "echo 'Static site - no build step required'"
-  publish = "."
+  # Plain static site (not Hugo). The build step copies the site files into
+  # `public/`, which is the deploy directory.
+  command = 'rm -rf public && mkdir -p public && find . -mindepth 1 -maxdepth 1 ! -name public ! -name .git ! -name .netlify ! -name netlify.toml ! -name .gitignore -exec cp -R {} public/ \;'
+  publish = "public"
