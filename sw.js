@@ -18,7 +18,7 @@ const STATIC_URLS = [
   // caching them means a backend URL change can strand clients on
   // a stale PB_URL. The fetch handler routes them network-only.
   "/manifest.json",
-  "/vendor/pocketbase.umd.js",
+  
 
   "/icons/icon-72x72.png",
   "/icons/icon-96x96.png",
