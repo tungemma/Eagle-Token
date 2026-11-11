@@ -34,7 +34,19 @@ let _txGeneration = 0;
 let _miningTickAbort = null;
 
 // ── UI HELPERS ───────────────────────────────────────────────────
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
 
+function escapeAttr(value) {
+  return escapeHTML(value);
+}
 function showScreen(id) {
   ["loadingScreen", "authScreen", "verificationScreen", "mainScreens"].forEach(s => {
     document.getElementById(s)?.classList.toggle("hidden", s !== id);
@@ -604,6 +616,63 @@ async function initMainApp() {
   }
 }
 
+
+
+async function uploadUserAvatar(file, userId) {
+  if (!file || !userId) {
+    throw new Error("Avatar file or user ID is missing.");
+  }
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error("Only JPG, PNG and WebP images are allowed.");
+  }
+
+  if (file.size > 2 * 1024 * 1024) {
+    throw new Error("Avatar must be smaller than 2 MB.");
+  }
+
+  const extension = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp"
+  }[file.type];
+
+  const filePath =
+    `${userId}/${crypto.randomUUID()}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, file, {
+      contentType: file.type,
+      upsert: false
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage
+    .from("avatars")
+    .getPublicUrl(filePath);
+
+  const avatarUrl = data.publicUrl;
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", userId);
+
+  if (profileError) {
+    await supabase.storage.from("avatars").remove([filePath]);
+    throw profileError;
+  }
+
+  return avatarUrl;
+}
 // ── LOAD PROFILE ─────────────────────────────────────────────────
 
 async function loadUserData() {
@@ -720,23 +789,168 @@ async function loadTaskRewards() {
   renderTaskRewards();
 }
 
-function renderTaskRewards() {
+
+async function renderTaskRewards() {
   const el = document.getElementById("tasksList");
   if (!el) return;
 
-  el.textContent = "Tasks are temporarily unavailable.";
+  el.innerHTML = `
+    <div class="bonus-box" style="justify-content:center;">
+      <div style="color:var(--text-secondary);font-size:13px;">
+        Loading tasks...
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data: tasks, error } = await supabase
+      .from("tasks")
+      .select("id,type,label,description,url,reward")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+
+    if (!tasks || tasks.length === 0) {
+      el.innerHTML = `
+        <div class="bonus-box" style="justify-content:center;">
+          <div style="color:var(--text-secondary);font-size:13px;">
+            No tasks are currently available. Check back later!
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    el.innerHTML = tasks.map(task => `
+      <div class="bonus-box" style="
+        display:flex;
+        flex-direction:column;
+        align-items:stretch;
+        gap:8px;
+        padding:14px;
+      ">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <strong>${escapeHTML(task.label)}</strong>
+          <span style="color:var(--success);font-weight:700;white-space:nowrap;">
+            +${Number(task.reward).toLocaleString()} EAGLE
+          </span>
+        </div>
+
+        ${task.description ? `
+          <div style="color:var(--text-secondary);font-size:12px;">
+            ${escapeHTML(task.description)}
+          </div>
+        ` : ""}
+
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${task.url ? `
+            <a href="${escapeAttr(task.url)}"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="btn btn-secondary"
+               style="font-size:12px;padding:8px 12px;">
+              Open Task
+            </a>
+          ` : ""}
+
+          <button type="button"
+            class="btn btn-primary"
+            style="font-size:12px;padding:8px 12px;"
+            onclick="openTaskSubmitModal('${task.id}')">
+            Submit Proof
+          </button>
+        </div>
+      </div>
+    `).join("");
+
+  } catch (err) {
+    console.error("[tasks] Failed to load tasks:", err);
+
+    el.innerHTML = `
+      <div style="color:var(--error);font-size:13px;padding:12px;">
+        Could not load tasks. Please try again later.
+      </div>
+    `;
+  }
 }
 
-function openTaskSubmitModal() {
-  showAlert(
-    "taskAlert",
-    "Task submissions are not available yet.",
-    "info"
-  );
+
+let selectedTask = null;
+
+async function openTaskSubmitModal(taskId) {
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .select("id,label,description,reward")
+    .eq("id", taskId)
+    .eq("active", true)
+    .single();
+
+  if (error || !task) {
+    showAlert("taskAlert", "This task is no longer available.", "error");
+    return;
+  }
+
+  selectedTask = task;
+
+  document.getElementById("taskSubmitTitle").textContent = task.label;
+  document.getElementById("taskSubmitDesc").textContent =
+    task.description || "Complete this task and submit your proof.";
+
+  document.getElementById("taskSubmitHint").textContent =
+    `Reward: ${Number(task.reward).toLocaleString()} EAGLE`;
+
+  document.getElementById("taskSubmitInputLabel").textContent =
+    "Proof (URL or description)";
+
+  document.getElementById("taskSubmitInput").value = "";
+  document.getElementById("taskSubmitError").textContent = "";
+
+  const modal = document.getElementById("taskSubmitModal");
+  modal.style.display = "flex";
 }
 
-document.getElementById("taskSubmitBtn")?.addEventListener("click", () => {
-  showAlert("taskAlert", "Task submissions are not available yet.", "info");
+document.getElementById("taskSubmitBtn")?.addEventListener("click", async () => {
+  if (!selectedTask) return;
+
+  const button = document.getElementById("taskSubmitBtn");
+  const input = document.getElementById("taskSubmitInput");
+  const errorEl = document.getElementById("taskSubmitError");
+
+  const proof = input.value.trim();
+
+  if (!proof) {
+    errorEl.textContent = "Please enter your proof.";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Submitting...";
+  errorEl.textContent = "";
+
+  try {
+    const { error } = await supabase.rpc("submit_task_proof", {
+      p_task_id: selectedTask.id,
+      p_proof: proof
+    });
+
+    if (error) throw error;
+
+    document.getElementById("taskSubmitModal").style.display = "none";
+
+    showAlert("taskAlert", "Proof submitted successfully! Await admin review.", "success");
+
+    selectedTask = null;
+    await renderTaskRewards();
+
+  } catch (err) {
+    console.error("[tasks] Submission failed:", err);
+    errorEl.textContent = err.message || "Could not submit proof.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Submit";
+  }
 });
 
 document.getElementById("taskSubmitCancelBtn")?.addEventListener("click", () => {
@@ -1431,14 +1645,110 @@ document.getElementById("logoutBtn")?.addEventListener("click", async e => {
 // ── DELETE ACCOUNT ───────────────────────────────────────────────
 // Disabled until a secure server-side deletion Edge Function exists.
 
-document.getElementById("deleteAccountBtn")?.addEventListener("click", e => {
-  e.preventDefault();
 
-  alert(
-    "Account deletion is temporarily unavailable. " +
-    "A secure server-side deletion function must be implemented first."
-  );
-});
+ // ── DELETE ACCOUNT ───────────────────────────────────────────────
+
+document.getElementById("deleteAccountBtn")?.addEventListener(
+  "click",
+  async (e) => {
+    e.preventDefault();
+
+    const btn = e.currentTarget;
+    const originalText = btn.textContent;
+
+    const confirmed = window.confirm(
+      "PERMANENT ACCOUNT DELETION\n\n" +
+      "This action cannot be undone.\n\n" +
+      "Your remaining Eagle balance will be forfeited. " +
+      "Your profile and avatar will be removed, and your " +
+      "login account will be permanently deleted.\n\n" +
+      "Outstanding pending, approved, or processing withdrawals " +
+      "must be resolved first.\n\n" +
+      "Do you want to continue?"
+    );
+
+    if (!confirmed) return;
+
+    const confirmation = window.prompt(
+      'Type DELETE to permanently delete your account:'
+    );
+
+    if (confirmation !== "DELETE") {
+      alert("Account deletion cancelled. Confirmation did not match.");
+      return;
+    }
+
+    try {
+      btn.disabled = true;
+      btn.textContent = "Deleting account...";
+
+      const { data, error } = await supabase.functions.invoke(
+        "delete-account",
+        {
+          body: { confirmation: "DELETE" }
+        }
+      );
+
+      if (error) {
+        let message = error.message || "Account deletion failed.";
+
+        // Read the server's actual error response when available.
+        try {
+          if (error.context?.clone) {
+            const responseData = await error.context.clone().json();
+
+            if (responseData?.error) {
+              message = responseData.error;
+            }
+          }
+        } catch {
+          // Keep the original error message.
+        }
+
+        throw new Error(message);
+      }
+
+      if (!data?.success) {
+        throw new Error(
+          data?.error || "The server could not complete account deletion."
+        );
+      }
+
+      // Clear the local authentication session.
+      await supabase.auth.signOut({ scope: "local" });
+
+      // Stop account-related frontend activity.
+      stopUiTicker();
+      clearInterval(taskRewardsTicker);
+
+      if (_miningTickAbort) _miningTickAbort.abort();
+      if (_txAbort) _txAbort.abort();
+
+      currentUser = null;
+      miningSession = null;
+      taskRewards = [];
+      socialLinks = [];
+      pendingVerificationEmail = "";
+
+      showScreen("authScreen");
+
+      alert(
+        "Your Eagle account has been permanently deleted."
+      );
+
+    } catch (error) {
+      console.error("[auth] Account deletion failed:", error);
+
+      alert(
+        error.message || "Account deletion failed. Please try again."
+      );
+
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+);
 
 // ── CHANGE PASSWORD ──────────────────────────────────────────────
 
@@ -1598,6 +1908,123 @@ async function bootstrap() {
     showAlert("authAlert", getErrorMessage(err, "Unable to restore your session."));
   }
 }
+
+
+
+// ============================================================
+// PROFILE AVATAR UPLOAD — SUPABASE STORAGE
+// ============================================================
+
+const profileAvatarInput = document.getElementById("profileAvatarInput");
+const profAvatar = document.getElementById("profAvatar");
+
+// Open file picker when user clicks their profile photo
+profAvatar?.addEventListener("click", () => {
+  profileAvatarInput?.click();
+});
+
+// Upload selected avatar
+profileAvatarInput?.addEventListener("change", async () => {
+  const file = profileAvatarInput.files?.[0];
+  if (!file) return;
+
+  try {
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error("Please select a JPG, PNG, or WebP image.");
+    }
+
+    // Maximum file size: 2 MB
+    if (file.size > 2 * 1024 * 1024) {
+      throw new Error("Avatar must be smaller than 2 MB.");
+    }
+
+    const user = await getAuthenticatedUser();
+
+    if (!user?.id) {
+      throw new Error("Please log in before uploading a profile photo.");
+    }
+
+    profAvatar.textContent = "Uploading…";
+
+    const extensions = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp"
+    };
+
+    const filePath =
+      `${user.id}/${crypto.randomUUID()}.${extensions[file.type]}`;
+
+    // Upload image to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Get public image URL
+    const { data: publicData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+
+    const avatarUrl = publicData.publicUrl;
+
+    // Save URL in user's profile
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: avatarUrl })
+      .eq("id", user.id);
+
+    if (updateError) {
+      // Remove uploaded file if profile update fails
+      await supabase.storage.from("avatars").remove([filePath]);
+      throw updateError;
+    }
+
+    // Update local user data
+    if (currentUser) {
+      currentUser.avatar_url = avatarUrl;
+      currentUser.avatar = avatarUrl;
+    }
+
+    // Immediately display new avatar
+    const img = document.createElement("img");
+    img.src = avatarUrl;
+    img.alt = "Profile photo";
+
+    profAvatar.replaceChildren(img);
+
+    alert("Profile photo updated successfully.");
+
+  } catch (error) {
+    console.error("Avatar upload error:", error);
+
+    // Restore the previous avatar if upload fails
+    if (currentUser?.avatar_url) {
+      const img = document.createElement("img");
+      img.src = currentUser.avatar_url;
+      img.alt = "Profile photo";
+      profAvatar.replaceChildren(img);
+    } else {
+      profAvatar.textContent = "👤";
+    }
+
+    alert(error.message || "Could not upload profile photo.");
+
+  } finally {
+    profileAvatarInput.value = "";
+  }
+});
+
+
+
 
 // ── START APPLICATION ────────────────────────────────────────────
 

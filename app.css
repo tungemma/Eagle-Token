@@ -401,6 +401,7 @@ input::placeholder {
   margin-top: 2px;
 }
 
+
 /* ── TRANSACTION ITEMS ────────────────── */
 .tx-item {
   display: flex;
@@ -589,3 +590,53 @@ a.btn-ghost {
 a.btn-ghost:hover { background: rgba(255,255,255,0.1); }
 a.btn.btn-primary { color: #000; }
 a.btn.btn-primary:hover { background: var(--accent-hover); }
+
+.forgot-password-wrapper {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100%;
+    margin-top: 16px !important;
+}
+
+.forgot-password-wrapper .forgot-password-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+
+    padding: 10px 20px !important;
+
+    color: #d4a017 !important;
+    background: rgba(212, 160, 23, 0.08) !important;
+
+    border: 1px solid #d4a017 !important;
+    border-radius: 30px !important;
+
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+
+    cursor: pointer;
+    transition: all 0.25s ease !important;
+}
+
+.forgot-password-wrapper .forgot-password-link:hover {
+    color: #fff !important;
+    background: #d4a017 !important;
+    box-shadow: 0 4px 12px rgba(212, 160, 23, 0.2);
+    transform: translateY(-2px);
+}
+
+#profAvatar {
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+}
+
+#profAvatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}

@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23f59e0b' width='192' height='192'/><text x='96' y='144' font-size='120' text-anchor='middle' dominant-baseline='middle'>🦅</text></svg>" />
   <link rel="apple-touch-icon" href="/icons/icon-180.png" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="./app.css">
 
   <title>Eagle Token - Mining App</title>
 </head>
@@ -50,6 +50,13 @@
           <input id="loginEmail" placeholder="Email" type="email" />
           <input id="loginPassword" placeholder="Password" type="password" />
           <button id="loginBtn" type="button" class="btn btn-primary" style="width: 100%; padding: 12px; margin-bottom: 10px;">Login</button>
+          <div class="forgot-password-wrapper">
+    <a href="./forgot-password.html" class="forgot-password-link">
+        <i class="bi bi-shield-lock"></i>
+        Forgot Password?
+    </a>
+</div>
+
         </div>
 
         <form id="registerForm" class="hidden" onsubmit="return false;">
@@ -66,6 +73,8 @@
           <input id="regConfirmPassword" placeholder="Confirm Password" type="password" autocomplete="new-password" />
 
           <button id="registerBtn" type="button" class="btn btn-primary" style="width: 100%; padding: 12px;">Create Account</button>
+      
+
         </form>
       </div>
     </div>
@@ -337,12 +346,25 @@
 
       <!-- PROFILE SCREEN -->
       <section id="profileScreen" class="hidden">
-        <div class="profile-header">
-          <div class="profile-avatar" id="profAvatar">👤</div>
-          <div class="profile-name" id="profUser">User</div>
-          <div class="profile-email" id="profEmail"></div>
-        </div>
+       <div class="profile-header">
+  <div class="profile-avatar" id="profAvatar" title="Change profile photo">
+    👤
+  </div>
 
+  <input
+    type="file"
+    id="profileAvatarInput"
+    accept="image/jpeg,image/png,image/webp"
+    hidden
+  >
+
+  <div class="profile-name" id="profUser">User</div>
+  <div class="profile-email" id="profEmail"></div>
+
+  <small style="color:var(--text-secondary);font-size:11px;">
+    Tap your photo to change it
+  </small>
+</div>
         <div class="card card-lg">
           <div class="card-header" style="margin-bottom: 16px;">Account Information</div>
 
