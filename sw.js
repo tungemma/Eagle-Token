@@ -6,7 +6,7 @@
      • API calls (/api/, /eagle/, /_/):   network-only
    ========================================= */
 
-const CACHE_NAME = "eagle-v8";
+const CACHE_NAME = "eagle-v9";
 
 const STATIC_URLS = [
   "/",
@@ -75,7 +75,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  const url = new URL(event.request.url);
+   const url = new URL(event.request.url);
+
+  // Never cache cross-origin requests (Supabase auth/REST/storage).
+  // They are per-user and carry Authorization headers.
+ if (url.origin !== self.location.origin) return;
+
 
   if (
     CONFIG_PATHS.has(url.pathname) ||

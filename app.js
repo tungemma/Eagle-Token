@@ -1632,10 +1632,17 @@ async function logoutUser() {
   miningSession = null;
   taskRewards = [];
   socialLinks = [];
-  pendingVerificationEmail = "";
+     pendingVerificationEmail = "";
 
-  showScreen("authScreen");
-}
+   showScreen("authScreen");
+
+  document.getElementById("recentList")?.replaceChildren();
+  document.getElementById("referralsList")?.replaceChildren();
+ document.getElementById("profAvatar")?.replaceChildren();
+  ["uname", "headerBalance", "balanceTop", "walletBalance",
+   "profUser", "profEmail", "profBalance", "profMemberSince"]
+    .forEach(id => setText(id, ""));
+ }
 
 document.getElementById("logoutBtn")?.addEventListener("click", async e => {
   e.preventDefault();
