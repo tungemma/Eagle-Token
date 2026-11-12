@@ -1,6 +1,17 @@
-# Plain static site served from the repository root.
-# No build step is needed (the root config.json is runtime app config,
-# not a Hugo config, despite Netlify's framework detection).
 [build]
   publish = "."
-  command = ""
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/config.json"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/config.js"
+  [headers.values]
+    Cache-Control = "no-store"
