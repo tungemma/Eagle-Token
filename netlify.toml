@@ -1,0 +1,6 @@
+# Plain static site served from the repository root.
+# No build step is needed (the root config.json is runtime app config,
+# not a Hugo config, despite Netlify's framework detection).
+[build]
+  publish = "."
+  command = ""
